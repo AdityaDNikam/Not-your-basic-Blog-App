@@ -1,0 +1,9 @@
+Day1
+.Created a lander, log_in, create_acc page
+.inetiated a mongo schema form the basic creadentials
+
+Day2
+.Create the blogs showing page that also have Your profile related info too
+.create the Update and delete routes too
+.Update the UI part
+.Set up cookies and authentecation on the "/blog/:user" route that shows the blogs
