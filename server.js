@@ -6,6 +6,7 @@ import bcryptjs from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import User from './models/User.js';
 import Blog from './models/Blog.js';
+import { verifyAuth, verifyUserOwnership, verifyBlogOwnership } from './.util';
 
 dotenv.config();
 
@@ -29,42 +30,6 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/basic-
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('MongoDB connected successfully'))
   .catch((err) => console.error('MongoDB connection error:', err));
-
-// AUTH MIDDLEWARE - Verify JWT and decrypt email from cookie
-const verifyAuth = async (req, res, next) => {
-  try {
-    const token = req.cookies.authToken;
-    const encryptedEmail = req.cookies.userEmail;
-
-    if (!token || !encryptedEmail) {
-      return res.redirect('/login');
-    }
-
-    // Verify JWT
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
-    // Decrypt email using bcryptjs (simple decryption by comparing)
-    // For this implementation, we'll verify email exists in DB
-    const user = await User.findOne({ email: decoded.email });
-    
-    if (!user) {
-      return res.clearCookie('authToken').clearCookie('userEmail').redirect('/login');
-    }
-
-    // Decrypt email by comparing with hashed version
-    const emailMatchesHash = await bcryptjs.compare(user.email, encryptedEmail);
-    
-    if (!emailMatchesHash) {
-      return res.clearCookie('authToken').clearCookie('userEmail').redirect('/login');
-    }
-
-    req.user = decoded;
-    req.userDb = user;
-    next();
-  } catch (error) {
-    res.clearCookie('authToken').clearCookie('userEmail').redirect('/login');
-  }
-};
 
 // Routes
 
@@ -146,8 +111,6 @@ app.post('/create_profile', async (req, res) => {
     });
 
     res.status(201).json({
-      message: 'Profile created successfully',
-      user: savedUser,
       redirect: `/${savedUser.username}`,
     });
   } catch (error) {
@@ -201,7 +164,6 @@ app.post('/login_user', async (req, res) => {
     });
 
     res.status(200).json({
-      message: 'Login successful',
       redirect: `/${user.username}`,
     });
   } catch (error) {
@@ -265,8 +227,8 @@ app.post('/api/blogs', verifyAuth, async (req, res) => {
   }
 });
 
-// Get all blogs for a specific user
-app.get('/api/blogs/:userId', async (req, res) => {
+// Get all blogs for a specific user - Protected & Ownership verified route
+app.get('/api/blogs/:userId', verifyAuth, verifyUserOwnership, async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -277,37 +239,25 @@ app.get('/api/blogs/:userId', async (req, res) => {
   }
 });
 
-// Get a single blog by ID
-app.get('/api/blogs/post/:blogId', async (req, res) => {
+// Get a single blog by ID - Protected & Ownership verified route
+app.get('/api/blogs/post/:blogId', verifyAuth, verifyBlogOwnership, async (req, res) => {
   try {
-    const { blogId } = req.params;
-
-    const blog = await Blog.findById(blogId).populate('user_id', 'username email name');
-    if (!blog) {
-      return res.status(404).json({ message: 'Blog not found' });
-    }
-
+    // Blog ownership already verified in middleware
+    const blog = await req.blog.populate('user_id', 'username email name');
     res.json(blog);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Update a blog - Protected route
-app.put('/api/blogs/:blogId', verifyAuth, async (req, res) => {
+// Update a blog - Protected & Ownership verified route
+app.put('/api/blogs/:blogId', verifyAuth, verifyBlogOwnership, async (req, res) => {
   try {
     const { blogId } = req.params;
     const { Blog_header, Blog_msg, related_url } = req.body;
 
-    const blog = await Blog.findById(blogId);
-    if (!blog) {
-      return res.status(404).json({ message: 'Blog not found' });
-    }
-
-    // Check if user is the blog owner
-    if (blog.user_id.toString() !== req.user.userId && blog.user_id.toString() !== req.userDb._id.toString()) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    // Blog ownership already verified in middleware
+    const blog = req.blog;
 
     const updatedBlog = await Blog.findByIdAndUpdate(
       blogId,
@@ -326,20 +276,13 @@ app.put('/api/blogs/:blogId', verifyAuth, async (req, res) => {
   }
 });
 
-// Delete a blog - Protected route
-app.delete('/api/blogs/:blogId', verifyAuth, async (req, res) => {
+// Delete a blog - Protected & Ownership verified route
+app.delete('/api/blogs/:blogId', verifyAuth, verifyBlogOwnership, async (req, res) => {
   try {
     const { blogId } = req.params;
 
-    const blog = await Blog.findById(blogId);
-    if (!blog) {
-      return res.status(404).json({ message: 'Blog not found' });
-    }
-
-    // Check if user is the blog owner
-    if (blog.user_id.toString() !== req.user.userId && blog.user_id.toString() !== req.userDb._id.toString()) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    // Blog ownership already verified in middleware
+    const blog = req.blog;
 
     await Blog.findByIdAndDelete(blogId);
     res.json({ message: 'Blog deleted successfully' });
@@ -348,8 +291,8 @@ app.delete('/api/blogs/:blogId', verifyAuth, async (req, res) => {
   }
 });
 
-// Get all users
-app.get('/api/users', async (req, res) => {
+// Get all users - Protected route
+app.get('/api/users', verifyAuth, async (req, res) => {
   try {
     const users = await User.find();
     res.json(users);
@@ -358,8 +301,8 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Get a single user by ID
-app.get('/api/users/:id', async (req, res) => {
+// Get a single user by ID - Protected route
+app.get('/api/users/:id', verifyAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -371,8 +314,8 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-// Update a user
-app.put('/api/users/:id', async (req, res) => {
+// Update a user - Protected & Ownership verified route
+app.put('/api/users/:id', verifyAuth, verifyUserOwnership, async (req, res) => {
   try {
     const { name, email, password, number } = req.body;
     const user = await User.findByIdAndUpdate(
@@ -389,8 +332,8 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-// Delete a user
-app.delete('/api/users/:id', async (req, res) => {
+// Delete a user - Protected & Ownership verified route
+app.delete('/api/users/:id', verifyAuth, verifyUserOwnership, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {

@@ -7,3 +7,6 @@ Day2
 .create the Update and delete routes too
 .Update the UI part
 .Set up cookies and authentecation on the "/blog/:user" route that shows the blogs
+
+Day 3 
+.Start learning React and start changing the ejs files to react files
