@@ -10,3 +10,8 @@ Day2
 
 Day 3 
 .Start learning React and start changing the ejs files to react files
+
+Future plans 
+Make a spend smarter web application, integrate it with this Blog app 
+Make this blog app more of as task tracker app
+add third party auth tools to it , add AI features to it.
