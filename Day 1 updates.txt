@@ -11,6 +11,10 @@ Day2
 Day 3 
 .Start learning React and start changing the ejs files to react files
 
+Day 4
+.Replace Ejs files with React 
+.Checkout Claud API call integration.
+
 Future plans 
 Make a spend smarter web application, integrate it with this Blog app 
 Make this blog app more of as task tracker app

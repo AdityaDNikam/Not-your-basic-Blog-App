@@ -1,9 +1,11 @@
+
 import express from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import User from './models/User.js';
 import Blog from './models/Blog.js';
 import { verifyAuth, verifyUserOwnership, verifyBlogOwnership } from './.util';
@@ -18,11 +20,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
-app.use(cookieParser());
 
-// View Engine Setup
-app.set('view engine', 'ejs');
-app.set('views', './views');
+app.use(cookieParser());
+app.use(cors());
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/basic-crud';
@@ -31,25 +31,24 @@ mongoose.connect(MONGODB_URI)
   .then(() => console.log('MongoDB connected successfully'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
-// Routes
 
-// Landing Page
-app.get('/', (req, res) => {
-  res.render('index');
-});
-
-// Create Account Page
-app.get('/create-account', (req, res) => {
-  res.render('create-account');
-});
-
-// Login Page
-app.get('/login', (req, res) => {
-  res.render('login');
-});
 
 // API Routes
 
+// API: Get current authenticated user and their blogs (for React dashboard)
+app.get('/api/user', verifyAuth, async (req, res) => {
+  try {
+    // req.userDb is set by verifyAuth middleware
+    const user = req.userDb;
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+    const blogs = await Blog.find({ user_id: user._id }).sort({ createdAt: -1 });
+    res.json({ user, blogs });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 // Create Profile - Create a new user with authentication
 app.post('/create_profile', async (req, res) => {
   try {
@@ -171,27 +170,7 @@ app.post('/login_user', async (req, res) => {
   }
 });
 
-// Protected Route - User Dashboard
-app.get('/:username', verifyAuth, async (req, res) => {
-  try {
-    const { username } = req.params;
 
-    // Verify that the username in URL matches the JWT
-    if (username !== req.user.username) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Get user from database (already fetched in middleware)
-    const user = req.userDb;
-
-    // Fetch user's blogs
-    const blogs = await Blog.find({ user_id: user._id }).sort({ createdAt: -1 });
-
-    res.render('dashboard', { user, blogs });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
 
 // Logout
 app.get('/logout', (req, res) => {
