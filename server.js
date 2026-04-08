@@ -8,7 +8,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import User from './models/User.js';
 import Blog from './models/Blog.js';
-import { verifyAuth, verifyUserOwnership, verifyBlogOwnership } from './.util';
+import { verifyAuth, verifyUserOwnership, verifyBlogOwnership } from './utils.js';
 
 dotenv.config();
 
@@ -22,7 +22,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.use(cookieParser());
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true
+}));
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/basic-crud';
@@ -297,14 +300,19 @@ app.get('/api/users/:id', verifyAuth, async (req, res) => {
 app.put('/api/users/:id', verifyAuth, verifyUserOwnership, async (req, res) => {
   try {
     const { name, email, password, number } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { name, email, password, number },
-      { new: true, runValidators: true }
-    );
+    
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (password) user.password = password; // pre('save') hook will hash this securely
+    if (number) user.number = number;
+
+    await user.save();
+    
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: error.message });

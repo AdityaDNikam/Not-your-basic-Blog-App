@@ -9,45 +9,36 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 export const verifyAuth = async (req, res, next) => {
   try {
     const token = req.cookies.authToken;
-    const encryptedEmail = req.cookies.userEmail;
 
-    if (!token || !encryptedEmail) {
-      return res.redirect('/login');
+    if (!token) {
+      return res.status(401).json({ message: 'Unauthorized login required' });
     }
 
     // Verify JWT
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Decrypt email using bcryptjs (simple decryption by comparing)
-    // For this implementation, we'll verify email exists in DB
     const user = await User.findOne({ email: decoded.email });
     
     if (!user) {
-      return res.clearCookie('authToken').clearCookie('userEmail').redirect('/login');
-    }
-
-    // Decrypt email by comparing with hashed version
-    const emailMatchesHash = await bcryptjs.compare(user.email, encryptedEmail);
-    
-    if (!emailMatchesHash) {
-      return res.clearCookie('authToken').clearCookie('userEmail').redirect('/login');
+      return res.status(401).clearCookie('authToken').clearCookie('userEmail').json({ message: 'User not found' });
     }
 
     req.user = decoded;
     req.userDb = user;
     next();
   } catch (error) {
-    res.clearCookie('authToken').clearCookie('userEmail').redirect('/login');
+    res.status(401).clearCookie('authToken').clearCookie('userEmail').json({ message: 'Session expired' });
   }
 };
 
 // USER OWNERSHIP MIDDLEWARE - Verify that the userId in params matches the authenticated user
 export const verifyUserOwnership = (req, res, next) => {
   try {
-    const { userId } = req.params;
+    // support both :id and :userId route parameters
+    const targetId = req.params.id || req.params.userId; 
     const authenticatedUserId = req.user.userId || req.userDb._id.toString();
     
-    if (userId !== authenticatedUserId && userId !== req.userDb._id.toString()) {
+    if (targetId !== authenticatedUserId && targetId !== req.userDb._id.toString()) {
       return res.status(403).json({ message: 'Task unauthorised' });
     }
     
